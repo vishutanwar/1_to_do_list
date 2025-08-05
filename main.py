@@ -21,29 +21,20 @@ class Tasks(BaseModel):
 task_dict = {}
 app = FastAPI()
 
-# function to check is the date is valid or not !!
-# def is_valid_date(date: str):
-#     try:
-#         datetime.strptime(date, "%d/%m/%Y")
-#         return True
-#     except:
-#         False
 
 
 @app.get("/")
 def home():
     return JSONResponse(status_code= 200, content={"message": "This is home Page this application is to perform CRUD operations on your To-Do list which means you can Create, Read, Update and Delete TO-DO Tasks"})
-    # return "This is home Page\nthis application is to perform CRUD operations on your To-Do list which means you can Create, Read, Update and Delete TO-DO Tasks"
+
 
 # I will be using dictonary to store data, where key will be the date and value is list of tasks for that day. 
 
 #see all tasks:
 
-@app.get("/list_task")
+@app.get("/tasks")
 def date_task(date: str = Query(None, description = "Optional to add date, and it should be in DD-MM-YYYY formate")):
     if date:
-        # if not is_valid_date(date):
-        #     raise HTTPException(status_code=400, detail="Date is not in Valid formate, add DD/MM/YYYY, formate")
 
         if date.date not in task_dict:
             return JSONResponse(status_code=200, content={"message":f"We do not have any Tasks for {date.date}"})
@@ -59,10 +50,8 @@ def date_task(date: str = Query(None, description = "Optional to add date, and i
 
 
 # to add task
-@app.post("/create")
+@app.post("/tasks")
 def create(task:Tasks):
-    # if not is_valid_date(task.date):
-    #     raise HTTPException(status_code=400, detail="Date is not in Valid formate, add DD/MM/YYYY, formate")
 
 
     if task.date in task_dict.keys():
@@ -73,12 +62,14 @@ def create(task:Tasks):
     return JSONResponse(status_code=201, content="Your Tasks added to TO-DO List")
 
 
-
+# update task, it wil eb used to delete tasks, means remove tasks which are deleted
 @app.put("/update")
 def update(task: str, date:str = Query(description="date for which you need to update task")):
     task_dict[date].remove(task)
     return JSONResponse(status_code= 201, content={"message":"Task Removed"})
 
+
+# it will be used to delete the all tasks under a specific date!!
 @app.delete("/delete")
 def update(date):
     del task_dict[date]
