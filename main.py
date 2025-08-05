@@ -1,24 +1,28 @@
 from fastapi import FastAPI, HTTPException, Path, Query
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, FutureDate
 from datetime import datetime
-from typing import List
+from typing import List, Annotated
 
 
 class Tasks(BaseModel):
-    date: str
-    tasks: List[str]
+    date: FutureDate = Field(..., title="Date of tasks", description="Date under which Tasks Exists")
+    tasks: List[str] = Field(..., title="List of tasks", description=" This is list of tasks that needs to complete")
+
+
+class Date(BaseModel):
+    date: Annotated[FutureDate, Field(..., title="Date of tasks", description="Date under which Tasks Exists")]
 
 task_dict = {}
 app = FastAPI()
 
 # function to check is the date is valid or not !!
-def is_valid_date(date: str):
-    try:
-        datetime.strptime(date, "%d/%m/%Y")
-        return True
-    except:
-        False
+# def is_valid_date(date: str):
+#     try:
+#         datetime.strptime(date, "%d/%m/%Y")
+#         return True
+#     except:
+#         False
 
 
 @app.get("/")
@@ -31,10 +35,10 @@ def home():
 #see all tasks:
 
 @app.get("/list_task")
-def date_task(date: str = Query(None, description = "Optional to add date, and it should be in DD/MM/YYYY formate")):
+def date_task(date: Date = Path(description= "This is date it is used as path Parimiter")):
     if date:
-        if not is_valid_date(date):
-            raise HTTPException(status_code=400, detail="Date is not in Valid formate, add DD/MM/YYYY, formate")
+        # if not is_valid_date(date):
+        #     raise HTTPException(status_code=400, detail="Date is not in Valid formate, add DD/MM/YYYY, formate")
 
         if date not in task_dict:
             return JSONResponse(status_code=200, content={"message":f"We do not have any Tasks for {date}"})
@@ -52,8 +56,8 @@ def date_task(date: str = Query(None, description = "Optional to add date, and i
 # to add task
 @app.post("/create")
 def create(task:Tasks):
-    if not is_valid_date(task.date):
-        raise HTTPException(status_code=400, detail="Date is not in Valid formate, add DD/MM/YYYY, formate")
+    # if not is_valid_date(task.date):
+    #     raise HTTPException(status_code=400, detail="Date is not in Valid formate, add DD/MM/YYYY, formate")
 
 
     if task.date in task_dict.keys():
@@ -66,13 +70,13 @@ def create(task:Tasks):
 
 
 @app.put("/update")
-def update(task: str, date:str = Query(description="date for which you need to update task")):
-    task_dict[date].remove(task)
+def update(task: Tasks):
+    task_dict[task.date].remove(task.tasks)
     return JSONResponse(status_code= 201, content={"message":"Task Removed"})
 
 @app.delete("/delete")
-def update(date):
-    del task_dict[date]
-    return JSONResponse(status_code= 201, content={"message":f"All task from {date} are deleted"})
+def update(date: Date):
+    del task_dict[date.date]
+    return JSONResponse(status_code= 201, content={"message":f"All task from {date.date} are deleted"})
 
 
