@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException, Path, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, FutureDate
 from datetime import datetime
-from typing import List, Annotated
+from typing import List, Annotated, Optional
 
 
 class Tasks(BaseModel):
@@ -11,7 +11,10 @@ class Tasks(BaseModel):
 
 
 class Date(BaseModel):
-    date: Annotated[FutureDate, Field(..., title="Date of tasks", description="Date under which Tasks Exists")]
+    date: Annotated[FutureDate, Field( title="Date of tasks", description="Date under which Tasks Exists")]
+
+class DateOptional(BaseModel):
+    name: Annotated[Optional[str], Field(default=None)]
 
 task_dict = {}
 app = FastAPI()
@@ -35,15 +38,15 @@ def home():
 #see all tasks:
 
 @app.get("/list_task")
-def date_task(date: Date = Path(description= "This is date it is used as path Parimiter")):
-    if date:
+def date_task(date: DateOptional = Path(description= "This is date it is used as path Parimiter")):
+    if date.date:
         # if not is_valid_date(date):
         #     raise HTTPException(status_code=400, detail="Date is not in Valid formate, add DD/MM/YYYY, formate")
 
-        if date not in task_dict:
-            return JSONResponse(status_code=200, content={"message":f"We do not have any Tasks for {date}"})
+        if date.date not in task_dict:
+            return JSONResponse(status_code=200, content={"message":f"We do not have any Tasks for {date.date}"})
         else:
-            return task_dict[date] # list of to-do for that day
+            return task_dict[date.date] # list of to-do for that day
     else:
         if task_dict:  # if not empty
             return task_dict
