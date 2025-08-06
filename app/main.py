@@ -1,9 +1,12 @@
-from fastapi import FastAPI, HTTPException, Path, Query
+from fastapi import FastAPI, HTTPException, Path, Query, Depends, Body
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, field_validator, Field
 from datetime import datetime, date
 from typing import List, Optional, Annotated
+from sqlalchemy.orm import Session
 
+from database import get_db, Task as TaskModel
+from schemas import TaskCreate, TaskResponse
 
 class Tasks(BaseModel):
     date: date
@@ -28,7 +31,6 @@ class Day(BaseModel):
             raise ValueError("Date must be in DD-MM-YYYY format")
 
 
-task_dict = {}
 app = FastAPI()
 
 
@@ -42,64 +44,79 @@ def home():
 
 #see all tasks:
 
-@app.get("/tasks")
-def date_task(date: str = Query(default=None, description = "Date in DD-MM-YYYY format")):
+@app.get("/tasks", response_model=List[TaskResponse])
+def get_tasks(date: Optional[str] = Query(default=None, description="Date in DD-MM-YYYY format"), db: Session = Depends(get_db)):
+    query = db.query(TaskModel)
+
     if date:
         try:
             parsed_date = datetime.strptime(date, "%d-%m-%Y").date()
         except ValueError:
-            return JSONResponse(
-                status_code= 422, content={"error": "Invalid date formate, Use DD-MM-YYYY"}
-            )
+            raise HTTPException(status_code=422, detail="Invalid date format. Use DD-MM-YYYY")
+        
+        query = query.filter(TaskModel.date == parsed_date)
 
-        if parsed_date not in task_dict:
-            return JSONResponse(status_code=200, content={"message":f"No tasks found for {parsed_date}"})
-        else:
-            return task_dict[parsed_date] # list of to-do for that day
-    else:
-        if task_dict:  # if not empty.
-            return task_dict
-            
-        else:
-            return JSONResponse(status_code=200, content={"message":"No tasks exists"}) 
+    tasks = query.all()
+
+    if not tasks:
+        return []
+
+    return tasks
 
 
 
 # to add task
-@app.post("/tasks")
-def create(task:Tasks):
+@app.post("/tasks", response_model=TaskResponse)
+def create(task:TaskCreate, db: Session = Depends(get_db)):
+    try:
+        db_task = TaskModel(
+            date=task.date,
+            title=task.title,
+            description=task.description
+        )
+        db.add(db_task)
+        db.commit()
+        db.refresh(db_task)
 
+        return JSONResponse(status_code=201, content="Your Tasks added to TO-DO List")
 
-    if task.date in task_dict.keys():
-        task_dict[task.date].append(task.tasks)
-    else:
-        task_dict[task.date] = task.tasks
-    
-    return JSONResponse(status_code=201, content="Your Tasks added to TO-DO List")
+    except Exception as e:
+        print(f"Error while creating task: {e}")
+        raise HTTPException(status_code=500, detail="Something went wrong while creating task.")
 
 
 # update task, it wil eb used to delete tasks, means remove tasks which are deleted
 @app.put("/update")
-def update(task:str, date:str):
+def remove_task(title: str = Body(...), date: date = Body(...), db: Session = Depends(get_db)):
     try:
-        parsed_date = datetime.strptime(date, "%d-%m-%Y").date()
-        task_dict[parsed_date].remove(task)
-        return JSONResponse(status_code= 201, content={"message":"Task Removed"})
+        task = db.query(TaskModel).filter(TaskModel.date == date, TaskModel.title == title).first()
+
+        if not task:
+            raise HTTPException(status_code=404, detail="Task not found with the given date and title.")
+
+        db.delete(task)
+        db.commit()
+        return JSONResponse(status_code=200, content={"message": "Task removed successfully."})
+
     except Exception as e:
-        return JSONResponse(status_code=404, content={"error": str(e)})
+        raise HTTPException(status_code=500, detail=f"Error removing task: {str(e)}")
 
 
 # it will be used to delete the all tasks under a specific date!!
 @app.delete("/delete")
-def update(date: str):
+def delete_tasks_by_date(date: date = Query(...), db: Session = Depends(get_db)):
     try:
-        parsed_date = datetime.strptime(date, "%d-%m-%Y").date()
-        
-    except ValueError:
-        return JSONResponse(
-            status_code= 422, content={"error": "Invalid date formate, Use DD-MM-YYYY"}
-        )
-    del task_dict[parsed_date]
-    return JSONResponse(status_code= 201, content={"message":f"All task from {parsed_date} are deleted"})
+        tasks = db.query(TaskModel).filter(TaskModel.date == date).all()
 
+        if not tasks:
+            raise HTTPException(status_code=404, detail=f"No tasks found on {date}")
+
+        for task in tasks:
+            db.delete(task)
+        db.commit()
+
+        return JSONResponse(status_code=200, content={"message": f"All tasks on {date} deleted successfully."})
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error deleting tasks: {str(e)}")
 
