@@ -78,7 +78,7 @@ def create(task:TaskCreate, db: Session = Depends(get_db)):
         db.commit()
         db.refresh(db_task)
 
-        return JSONResponse(status_code=201, content="Your Tasks added to TO-DO List")
+        return db_task
 
     except Exception as e:
         print(f"Error while creating task: {e}")
