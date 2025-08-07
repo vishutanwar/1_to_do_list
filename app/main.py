@@ -1,9 +1,13 @@
-from fastapi import FastAPI, HTTPException, Path, Query, Depends, Body
+from fastapi import FastAPI, HTTPException, Path, Query, Depends, Body, Security
 from fastapi.responses import JSONResponse
+from fastapi.security import APIKeyHeader
 from pydantic import BaseModel, field_validator, Field
 from datetime import datetime, date
 from typing import List, Optional, Annotated
 from sqlalchemy.orm import Session
+import os
+from dotenv import load_dotenv
+load_dotenv()
 
 from database import get_db, Task as TaskModel
 from schemas import TaskCreate, TaskResponse
@@ -29,10 +33,15 @@ class Day(BaseModel):
             return datetime.strptime(value, "%d-%m-%Y").date()
         except ValueError:
             raise ValueError("Date must be in DD-MM-YYYY format")
+        
+# auth fn
+async def get_api_key(api_key_header: str = Security(APIKeyHeader(name="X-API-Key"))):
+    if api_key_header != os.environ.get("API_KEY"):
+        raise HTTPException(status_code=401, detail="Invalid API key")
+    return api_key_header
 
 
 app = FastAPI()
-
 
 
 @app.get("/")
@@ -67,7 +76,7 @@ def get_tasks(date: Optional[str] = Query(default=None, description="Date in DD-
 
 # to add task
 @app.post("/tasks", response_model=TaskResponse)
-def create(task:TaskCreate, db: Session = Depends(get_db)):
+def create(task:TaskCreate, db: Session = Depends(get_db), api_key: str = Depends(get_api_key)):
     try:
         db_task = TaskModel(
             date=task.date,
@@ -87,7 +96,7 @@ def create(task:TaskCreate, db: Session = Depends(get_db)):
 
 # update task, it wil eb used to delete tasks, means remove tasks which are deleted
 @app.put("/update")
-def remove_task(title: str = Body(...), date: date = Body(...), db: Session = Depends(get_db)):
+def remove_task(title: str = Body(...), date: date = Body(...), db: Session = Depends(get_db), api_key: str = Depends(get_api_key)):
     try:
         task = db.query(TaskModel).filter(TaskModel.date == date, TaskModel.title == title).first()
 
@@ -104,7 +113,7 @@ def remove_task(title: str = Body(...), date: date = Body(...), db: Session = De
 
 # it will be used to delete the all tasks under a specific date!!
 @app.delete("/delete")
-def delete_tasks_by_date(date: date = Query(...), db: Session = Depends(get_db)):
+def delete_tasks_by_date(date: date = Query(...), db: Session = Depends(get_db), api_key: str = Depends(get_api_key)):
     try:
         tasks = db.query(TaskModel).filter(TaskModel.date == date).all()
 
